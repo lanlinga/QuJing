@@ -5,7 +5,6 @@ on:
     branches:
       - main
       - master
-      - '**'
   pull_request:
     branches:
       - main
@@ -36,21 +35,21 @@ jobs:
         with:
           arguments: assembleDebug
 
-      - name: Upload Debug APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: debug-apk
-          path: app/build/outputs/apk/debug/*.apk
-          if-no-files-found: error
-
       - name: Build Release APK
         uses: gradle/gradle-build-action@v3
         with:
           arguments: assembleRelease
 
-      - name: Upload Release APK
-        uses: actions/upload-artifact@v4
+      - name: Create Release and Upload APKs
+        uses: softprops/action-gh-release@v1
+        if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'
         with:
-          name: release-apk
-          path: app/build/outputs/apk/release/*.apk
-          if-no-files-found: error
+          files: |
+            app/build/outputs/apk/debug/*.apk
+            app/build/outputs/apk/release/*.apk
+          name: "QuJing Build ${{ github.run_number }}"
+          tag_name: "build-${{ github.run_number }}"
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
