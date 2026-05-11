@@ -164,10 +164,10 @@ public class XposedEntry implements IXposedHookLoadPackage, IXposedHookZygoteIni
 
     private void hookSystemServicesForModernAndroid(ClassLoader classLoader) {
         // 为Android 12+系统hook更多安全限制
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        if (Build.VERSION.SDK_INT >= 31) { // Android 12 (S)
             try {
                 // Hook NetworkSecurityPolicy相关类
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                if (Build.VERSION.SDK_INT >= 24) { // Android N
                     hookNetworkSecurityPolicy();
                 }
                 XposedBridge.log("QuJing: System services hooked for Android " + Build.VERSION.SDK_INT);
@@ -244,12 +244,12 @@ public class XposedEntry implements IXposedHookLoadPackage, IXposedHookZygoteIni
 
     private void disableHiddenApiRestrictions(ClassLoader classLoader) {
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            if (Build.VERSION.SDK_INT >= 28) { // Android 9 (P)
                 // Android 9+的隐藏API限制
                 try {
                     Class<?> vmRuntimeClass = XposedHelpers.findClass("dalvik.system.VMRuntime", null);
                     Object vmRuntime = XposedHelpers.callStaticMethod(vmRuntimeClass, "getRuntime");
-                    XposedHelpers.callMethod(vmRuntime, "setHiddenApiExemptions", new String[]{"L"});
+                    XposedHelpers.callMethod(vmRuntime, "setHiddenApiExemptions", (Object) new String[]{"L"});
                     XposedBridge.log("QuJing: Disabled hidden API restrictions via VMRuntime");
                 } catch (Throwable e) {
                     XposedBridge.log("QuJing: Failed to disable hidden API via VMRuntime: " + e);
