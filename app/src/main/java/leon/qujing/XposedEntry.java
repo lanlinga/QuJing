@@ -85,53 +85,97 @@ public class XposedEntry implements IXposedHookLoadPackage, IXposedHookZygoteIni
 
     @Override
     public void handleLoadPackage(XC_LoadPackage.LoadPackageParam loadPackageParam) throws Throwable {
-        if(loadPackageParam.packageName.equals(StartupAPP))
-        {
-            new QuJingServer(61000);
-            XposedBridge.log("server start at 61000.");
-
-            if (Build.VERSION.SDK_INT >= 24)
+        try {
+            if(loadPackageParam.packageName.equals(StartupAPP))
             {
-                XposedHelpers.findAndHookMethod("android.app.ContextImpl", loadPackageParam.classLoader, "checkMode",int.class, XC_MethodReplacement.returnConstant(null));
-            }
-            return;
-        }
+                new QuJingServer(61000);
+                XposedBridge.log("server start at 61000.");
 
-        if (loadPackageParam.processName.contains(":")) return;
-        gatherInfo(loadPackageParam);
-        XposedHelpers.findAndHookMethod("com.android.okhttp.HttpHandler$CleartextURLFilter", XposedEntry.classLoader,"checkURLPermitted", URL.class, new XC_MethodHook() {
-            @Override
-            protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                XposedBridge.log("HttpHandler$CleartextURLFilter skip, packageName:"+ XposedEntry.packageName);
-                param.setResult(null);
+                if (Build.VERSION.SDK_INT >= 24)
+                {
+                    XposedHelpers.findAndHookMethod("android.app.ContextImpl", loadPackageParam.classLoader, "checkMode",int.class, XC_MethodReplacement.returnConstant(null));
+                }
+                return;
             }
-        });
-        disableHooks();
-        XposedHelpers.findAndHookMethod(Application.class, "attach", Context.class,
-                new XC_MethodHook() {
-                    @Override
-                    protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                        Context context = (Context) param.args[0];
-                        classLoader = context.getClassLoader();
-                        new Thread(new Runnable() {
-                            @Override
-                            public void run() {
-                                boolean isHook = false;
-                                try {
-                                    isHook = isNeedHook();
-                                } catch (IOException e) {
-                                    XposedBridge.log(e);
+
+            if (loadPackageParam.processName.contains(":")) return;
+            gatherInfo(loadPackageParam);
+            XposedHelpers.findAndHookMethod("com.android.okhttp.HttpHandler$CleartextURLFilter", XposedEntry.classLoader,"checkURLPermitted", URL.class, new XC_MethodHook() {
+                @Override
+                protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                    XposedBridge.log("HttpHandler$CleartextURLFilter skip, packageName:"+ XposedEntry.packageName);
+                    param.setResult(null);
+                }
+            });
+            
+            // 添加：Android 11+新的OkHttp明文流量检查
+            try {
+                if (Build.VERSION.SDK_INT >= 30) {
+                    XposedHelpers.findAndHookMethod("com.android.okhttp.internal.http.HttpEngine", XposedEntry.classLoader,
+                            "checkCleartextTrafficPermitted", String.class, new XC_MethodHook() {
+                                @Override
+                                protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                                    param.setResult(null);
                                 }
-                                XposedBridge.log(XposedEntry.packageName + " isHook: "+isHook);
-                                if (isHook) {
-                                    int pid = Process.myPid();
-                                    new QuJingServer(pid);
-                                    XposedBridge.log("QuJingServer Listening @:"+ pid +" packageName: "+XposedEntry.packageName);
+                            });
+                    XposedBridge.log("QuJing: Added Android 11+ HttpEngine hook");
+                }
+            } catch (Throwable e) {
+                XposedBridge.log("QuJing: Android 11+ hook failed - " + e);
+            }
+            
+            // 添加：NetworkSecurityPolicy明文流量检查
+            try {
+                if (Build.VERSION.SDK_INT >= 24) {
+                    XposedHelpers.findAndHookMethod("android.security.NetworkSecurityPolicy", null,
+                            "isCleartextTrafficPermitted", String.class, new XC_MethodReplacement() {
+                                @Override
+                                protected Object replaceHookedMethod(MethodHookParam param) throws Throwable {
+                                    return true;
                                 }
-                            }
-                        }).start();
-                    }
-                });
+                            });
+                    XposedHelpers.findAndHookMethod("android.security.NetworkSecurityPolicy", null,
+                            "isCleartextTrafficPermitted", new XC_MethodReplacement() {
+                                @Override
+                                protected Object replaceHookedMethod(MethodHookParam param) throws Throwable {
+                                    return true;
+                                }
+                            });
+                    XposedBridge.log("QuJing: Added NetworkSecurityPolicy hooks");
+                }
+            } catch (Throwable e) {
+                XposedBridge.log("QuJing: NetworkSecurityPolicy hooks failed - " + e);
+            }
+            
+            disableHooks();
+            XposedHelpers.findAndHookMethod(Application.class, "attach", Context.class,
+                    new XC_MethodHook() {
+                        @Override
+                        protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                            Context context = (Context) param.args[0];
+                            classLoader = context.getClassLoader();
+                            new Thread(new Runnable() {
+                                @Override
+                                public void run() {
+                                    boolean isHook = false;
+                                    try {
+                                        isHook = isNeedHook();
+                                    } catch (IOException e) {
+                                        XposedBridge.log(e);
+                                    }
+                                    XposedBridge.log(XposedEntry.packageName + " isHook: "+isHook);
+                                    if (isHook) {
+                                        int pid = Process.myPid();
+                                        new QuJingServer(pid);
+                                        XposedBridge.log("QuJingServer Listening @:"+ pid +" packageName: "+XposedEntry.packageName);
+                                    }
+                                }
+                            }).start();
+                        }
+                    });
+        } catch (Throwable e) {
+            XposedBridge.log("QuJing: Error in handleLoadPackage - " + e);
+        }
     }
 
     private void disableHooks(){
