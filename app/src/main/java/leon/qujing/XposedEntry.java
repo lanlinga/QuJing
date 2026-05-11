@@ -12,15 +12,12 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
-import java.net.MalformedURLException;
-import java.net.ProtocolException;
 import java.net.URL;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.IXposedHookZygoteInit;
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XC_MethodReplacement;
-import de.robv.android.xposed.XSharedPreferences;
 import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
 import de.robv.android.xposed.callbacks.XC_LoadPackage;
@@ -29,7 +26,6 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage;
 public class XposedEntry implements IXposedHookLoadPackage, IXposedHookZygoteInit {
     public static XModuleResources res;
     public static ClassLoader classLoader;
-    public static XSharedPreferences sPrefs;
     public static String packageName;
     Boolean isFirstApplication;
     String processName;
@@ -38,12 +34,11 @@ public class XposedEntry implements IXposedHookLoadPackage, IXposedHookZygoteIni
 
     @Override
     public void initZygote(StartupParam startupParam) throws Throwable {
-        res = XModuleResources.createInstance(startupParam.modulePath, null);
-        try{
-
+        try {
+            res = XModuleResources.createInstance(startupParam.modulePath, null);
         }
         catch (Exception e){
-            e.printStackTrace();
+            XposedBridge.log("initZygote error: " + e);
         }
     }
 
@@ -85,82 +80,116 @@ public class XposedEntry implements IXposedHookLoadPackage, IXposedHookZygoteIni
 
     @Override
     public void handleLoadPackage(XC_LoadPackage.LoadPackageParam loadPackageParam) throws Throwable {
-        if(loadPackageParam.packageName.equals(StartupAPP))
-        {
-            new QuJingServer(61000);
-            XposedBridge.log("server start at 61000.");
+        try {
+            if (loadPackageParam.packageName.equals(StartupAPP)) {
+                try {
+                    new QuJingServer(61000);
+                    XposedBridge.log("server start at 61000.");
 
-            if (Build.VERSION.SDK_INT >= 24)
-            {
-                XposedHelpers.findAndHookMethod("android.app.ContextImpl", loadPackageParam.classLoader, "checkMode",int.class, XC_MethodReplacement.returnConstant(null));
+                    if (Build.VERSION.SDK_INT >= 24) {
+                        try {
+                            XposedHelpers.findAndHookMethod("android.app.ContextImpl", loadPackageParam.classLoader, "checkMode", int.class, XC_MethodReplacement.returnConstant(null));
+                        } catch (Throwable e) {
+                            XposedBridge.log("Hook ContextImpl.checkMode failed: " + e);
+                        }
+                    }
+                } catch (Throwable e) {
+                    XposedBridge.log("Startup package error: " + e);
+                }
+                return;
             }
-            return;
-        }
 
-        if (loadPackageParam.processName.contains(":")) return;
-        gatherInfo(loadPackageParam);
-        XposedHelpers.findAndHookMethod("com.android.okhttp.HttpHandler$CleartextURLFilter", XposedEntry.classLoader,"checkURLPermitted", URL.class, new XC_MethodHook() {
-            @Override
-            protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                XposedBridge.log("HttpHandler$CleartextURLFilter skip, packageName:"+ XposedEntry.packageName);
-                param.setResult(null);
-            }
-        });
-        disableHooks();
-        XposedHelpers.findAndHookMethod(Application.class, "attach", Context.class,
-                new XC_MethodHook() {
+            if (loadPackageParam.processName != null && loadPackageParam.processName.contains(":")) return;
+            
+            gatherInfo(loadPackageParam);
+            
+            try {
+                ClassLoader cl = XposedEntry.classLoader != null ? XposedEntry.classLoader : loadPackageParam.classLoader;
+                XposedHelpers.findAndHookMethod("com.android.okhttp.HttpHandler$CleartextURLFilter", cl, "checkURLPermitted", URL.class, new XC_MethodHook() {
                     @Override
-                    protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                        Context context = (Context) param.args[0];
-                        classLoader = context.getClassLoader();
-                        new Thread(new Runnable() {
-                            @Override
-                            public void run() {
-                                boolean isHook = false;
-                                try {
-                                    isHook = isNeedHook();
-                                } catch (IOException e) {
-                                    XposedBridge.log(e);
-                                }
-                                XposedBridge.log(XposedEntry.packageName + " isHook: "+isHook);
-                                if (isHook) {
-                                    int pid = Process.myPid();
-                                    new QuJingServer(pid);
-                                    XposedBridge.log("QuJingServer Listening @:"+ pid +" packageName: "+XposedEntry.packageName);
-                                }
-                            }
-                        }).start();
+                    protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                        XposedBridge.log("HttpHandler$CleartextURLFilter skip, packageName:" + XposedEntry.packageName);
+                        param.setResult(null);
                     }
                 });
+            } catch (Throwable e) {
+                XposedBridge.log("Hook HttpHandler failed: " + e);
+            }
+
+            disableHooks(loadPackageParam.classLoader);
+            
+            XposedHelpers.findAndHookMethod(Application.class, "attach", Context.class,
+                    new XC_MethodHook() {
+                        @Override
+                        protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                            try {
+                                Context context = (Context) param.args[0];
+                                classLoader = context.getClassLoader();
+                                new Thread(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        boolean isHook = false;
+                                        try {
+                                            isHook = isNeedHook();
+                                        } catch (IOException e) {
+                                            XposedBridge.log(e);
+                                        }
+                                        XposedBridge.log(XposedEntry.packageName + " isHook: " + isHook);
+                                        if (isHook) {
+                                            try {
+                                                int pid = Process.myPid();
+                                                new QuJingServer(pid);
+                                                XposedBridge.log("QuJingServer Listening @:" + pid + " packageName: " + XposedEntry.packageName);
+                                            } catch (Throwable e) {
+                                                XposedBridge.log("QuJingServer start failed: " + e);
+                                            }
+                                        }
+                                    }
+                                }).start();
+                            } catch (Throwable e) {
+                                XposedBridge.log("Application attach error: " + e);
+                            }
+                        }
+                    });
+        } catch (Throwable e) {
+            XposedBridge.log("handleLoadPackage failed: " + e);
+        }
     }
 
-    private void disableHooks(){
-        XposedHelpers.findAndHookMethod(ClassLoader.class,"loadClass",String.class,new XC_MethodHook(){
-            @Override
-            protected void beforeHookedMethod(MethodHookParam param) throws Throwable{
-                if(param.args!=null && param.args[0] != null && param.args[0].toString().startsWith("de.robv.android.xposed.")){
-                    //改成一个不存在的类
-                    param.args[0]="de.robv.android.xposed.ThTest";
+    private void disableHooks(ClassLoader classLoader){
+        try {
+            XposedHelpers.findAndHookMethod(ClassLoader.class, "loadClass", String.class, new XC_MethodHook() {
+                @Override
+                protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                    if (param.args != null && param.args[0] != null && param.args[0].toString().startsWith("de.robv.android.xposed.")) {
+                        //改成一个不存在的类
+                        param.args[0] = "de.robv.android.xposed.ThTest";
+                    }
                 }
-                super.beforeHookedMethod(param);
-            }
-        });
-        XposedHelpers.findAndHookMethod(Class.class,"getDeclaredField",String.class,new XC_MethodHook(){
-            @Override
-            protected void beforeHookedMethod(MethodHookParam param) throws Throwable{
-                if(param.args!=null && param.args[0] != null && param.args[0].toString().equals("disableHooks")){
-                    param.args[0]="disableHook";
+            });
+        } catch (Throwable e) {
+            XposedBridge.log("Hook ClassLoader.loadClass failed: " + e);
+        }
+
+        try {
+            XposedHelpers.findAndHookMethod(Class.class, "getDeclaredField", String.class, new XC_MethodHook() {
+                @Override
+                protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                    if (param.args != null && param.args[0] != null && param.args[0].toString().equals("disableHooks")) {
+                        param.args[0] = "disableHook";
+                    }
                 }
-                super.beforeHookedMethod(param);
-            }
-        });
+            });
+        } catch (Throwable e) {
+            XposedBridge.log("Hook Class.getDeclaredField failed: " + e);
+        }
     }
 
     private void gatherInfo(XC_LoadPackage.LoadPackageParam loadPackageParam) {
         packageName = loadPackageParam.packageName;
         isFirstApplication = loadPackageParam.isFirstApplication;
-//        classLoader = loadPackageParam.classLoader;
         processName = loadPackageParam.processName;
         appInfo = loadPackageParam.appInfo;
+        classLoader = loadPackageParam.classLoader;
     }
 }

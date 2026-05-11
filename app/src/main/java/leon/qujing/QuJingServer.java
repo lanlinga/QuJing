@@ -59,67 +59,63 @@ public class QuJingServer extends NanoWSD {
 
     public QuJingServer(int port, Hashtable<String, Operation> route) {
         super(port);
-        if(port == 61000) {
-            QuJingServer.route.put("/", new config());
-            QuJingServer.route.put("/settargetapp", new setTargetApp());
-            QuJingServer.route.put("/manualguid", new manualGuid());
-            QuJingServer.route.put("/querytargetapp", new queryTargetApp());
-        }
-        else {
-            //注册对象序列化/反序列化处理器
-
-            //通用序列化
-            parsers.put("store", new StoredObjectParser());
-            parsers.put("generic", new GenericParser());
-
-            //常见类型序列化web
-            parsers.put("string", new StringParser());
-            parsers.put("Context", new ContextParser());
-            parsers.put("int", new IntParser());
-            parsers.put("short", new ShortParser());
-            parsers.put("long", new LongParser());
-            parsers.put("float", new FloatParser());
-            parsers.put("double", new DoubleParser());
-            parsers.put("boolean", new BooleanParser());
-            parsers.put("byte", new ByteArrayParser());
-            parsers.put("StringArray", new StringArrayParser());
-            parsers.put("StringArrayList", new StringArrayListParser());
-            parsers.put("StringMap", new StringMapParser());
-
-            //常见类型序列化android
-            parsers.put("Ljava.lang.Integer;", new IntParser());
-            parsers.put("Ljava.lang.Boolean;", new BooleanParser());
-            parsers.put("Ljava.lang.String;", new StringParser());
-            parsers.put("I", new IntParser());
-            parsers.put("S", new ShortParser());
-            parsers.put("J", new LongParser());
-            parsers.put("F", new FloatParser());
-            parsers.put("D", new DoubleParser());
-            parsers.put("Z", new BooleanParser());
-            parsers.put("[B", new ByteArrayParser());
-
-            //注册WebSocket路由
-//            wsroute.put("/", new wsTracer());
-            wsroute.put("/methodview", new wsMethodView());
-            wsroute.put("/packetview", new wsPacketView());
-//            wsroute.put("/wsTraceNew", new wsTracerNew());
-            //注册HTTP请求路由
-            if (route != null) QuJingServer.route = route;
-            QuJingServer.route.put("/", new index());
-            QuJingServer.route.put("/config", new index());
-            QuJingServer.route.put("/status", new status());
-            QuJingServer.route.put("/classview", new ClassView());
-            QuJingServer.route.put("/methodview", new MethodView());
-            QuJingServer.route.put("/packetview", new PacketView());
-//            QuJingServer.route.put("/tracer", new Tracer());
-            QuJingServer.route.put("/invoke", new Invoke());
-//            QuJingServer.route.put("/invoke2", new Invoke_New());
-//            QuJingServer.route.put("/memory", new MemoryView());
-        }
         try {
+            if(port == 61000) {
+                QuJingServer.route.put("/", new config());
+                QuJingServer.route.put("/settargetapp", new setTargetApp());
+                QuJingServer.route.put("/manualguid", new manualGuid());
+                QuJingServer.route.put("/querytargetapp", new queryTargetApp());
+            }
+            else {
+                //注册对象序列化/反序列化处理器
+
+                //通用序列化
+                parsers.put("store", new StoredObjectParser());
+                parsers.put("generic", new GenericParser());
+
+                //常见类型序列化web
+                parsers.put("string", new StringParser());
+                parsers.put("Context", new ContextParser());
+                parsers.put("int", new IntParser());
+                parsers.put("short", new ShortParser());
+                parsers.put("long", new LongParser());
+                parsers.put("float", new FloatParser());
+                parsers.put("double", new DoubleParser());
+                parsers.put("boolean", new BooleanParser());
+                parsers.put("byte", new ByteArrayParser());
+                parsers.put("StringArray", new StringArrayParser());
+                parsers.put("StringArrayList", new StringArrayListParser());
+                parsers.put("StringMap", new StringMapParser());
+
+                //常见类型序列化android
+                parsers.put("Ljava.lang.Integer;", new IntParser());
+                parsers.put("Ljava.lang.Boolean;", new BooleanParser());
+                parsers.put("Ljava.lang.String;", new StringParser());
+                parsers.put("I", new IntParser());
+                parsers.put("S", new ShortParser());
+                parsers.put("J", new LongParser());
+                parsers.put("F", new FloatParser());
+                parsers.put("D", new DoubleParser());
+                parsers.put("Z", new BooleanParser());
+                parsers.put("[B", new ByteArrayParser());
+
+                //注册WebSocket路由
+                wsroute.put("/methodview", new wsMethodView());
+                wsroute.put("/packetview", new wsPacketView());
+                //注册HTTP请求路由
+                if (route != null) QuJingServer.route = route;
+                QuJingServer.route.put("/", new index());
+                QuJingServer.route.put("/config", new index());
+                QuJingServer.route.put("/status", new status());
+                QuJingServer.route.put("/classview", new ClassView());
+                QuJingServer.route.put("/methodview", new MethodView());
+                QuJingServer.route.put("/packetview", new PacketView());
+                QuJingServer.route.put("/invoke", new Invoke());
+            }
             //启动监听
             start(0, false);
-        } catch (IOException e) {
+        } catch (Throwable e) {
+            de.robv.android.xposed.XposedBridge.log("QuJingServer init error: " + e);
             e.printStackTrace();
         }
     }
